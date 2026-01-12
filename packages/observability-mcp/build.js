@@ -18,11 +18,24 @@
 
 import { build } from 'esbuild';
 
-build({
+// Build stdio server
+const buildStdio = build({
   entryPoints: ['src/server.ts'],
   bundle: true,
   outfile: 'dist/bundle.js',
   platform: 'node',
   format: 'esm',
   external: ['google-auth-library', 'googleapis'],
-}).catch(() => process.exit(1));
+});
+
+// Build HTTP server
+const buildHttp = build({
+  entryPoints: ['src/server-http.ts'],
+  bundle: true,
+  outfile: 'dist/bundle-http.js',
+  platform: 'node',
+  format: 'esm',
+  external: ['google-auth-library', 'googleapis', 'express', 'dotenv'],
+});
+
+Promise.all([buildStdio, buildHttp]).catch(() => process.exit(1));

@@ -42,3 +42,5 @@ packages/gcloud-mcp/README.md
 
 # Environment variables
 .env
+
+.keys/
