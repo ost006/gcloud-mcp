@@ -1,0 +1,28 @@
+version: '3.8'
+
+services:
+  observability-mcp:
+    build:
+      context: ../..
+      dockerfile: packages/observability-mcp/Dockerfile
+    container_name: observability-mcp-http
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      # GCP authentication - uncomment and configure as needed
+      # - GOOGLE_APPLICATION_CREDENTIALS=/app/credentials/service-account.json
+      # - GOOGLE_CLOUD_PROJECT=your-project-id
+    # volumes:
+      # Mount GCP service account credentials if needed
+      # - ./credentials:/app/credentials:ro
+      # Mount .env file if needed
+      # - ./.env:/app/.env:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
