@@ -44,3 +44,4 @@ packages/gcloud-mcp/README.md
 .env
 
 .keys/
+fly.toml
