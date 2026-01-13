@@ -35,7 +35,7 @@ const buildHttp = build({
   outfile: 'dist/bundle-http.js',
   platform: 'node',
   format: 'esm',
-  external: ['google-auth-library', 'googleapis', 'express', 'dotenv'],
+  external: ['google-auth-library', 'googleapis', 'express', 'dotenv', 'jsonwebtoken'],
 });
 
 Promise.all([buildStdio, buildHttp]).catch(() => process.exit(1));

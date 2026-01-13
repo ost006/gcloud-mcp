@@ -16,8 +16,6 @@
 
 import { apiClientFactory } from '../../utils/api_client_factory.js';
 
-const logging = apiClientFactory.getLoggingClient();
-
 /**
  * Lists log entries from the Google Cloud Logging API.
  * @param resourceNames The resource names to search for log entries (e.g.,
@@ -47,6 +45,7 @@ export async function listLogEntries(
   };
 
   try {
+    const logging = apiClientFactory.getLoggingClient();
     const response = await logging.entries.list(request);
     return JSON.stringify(response.data.entries || [], null, 2);
   } catch (error: unknown) {
@@ -77,6 +76,7 @@ export async function listLogNames(
   };
 
   try {
+    const logging = apiClientFactory.getLoggingClient();
     const response = await logging.projects.logs.list(request);
     return JSON.stringify(response.data.logNames || [], null, 2);
   } catch (error: unknown) {
@@ -107,6 +107,7 @@ export async function listBuckets(
   };
 
   try {
+    const logging = apiClientFactory.getLoggingClient();
     const response = await logging.projects.locations.buckets.list(request);
     return JSON.stringify(response.data.buckets || [], null, 2);
   } catch (error: unknown) {
@@ -137,6 +138,7 @@ export async function listViews(
   };
 
   try {
+    const logging = apiClientFactory.getLoggingClient();
     const response = await logging.projects.locations.buckets.views.list(request);
     return JSON.stringify(response.data.views || [], null, 2);
   } catch (error: unknown) {
@@ -167,6 +169,7 @@ export async function listSinks(
   };
 
   try {
+    const logging = apiClientFactory.getLoggingClient();
     const response = await logging.projects.sinks.list(request);
     return JSON.stringify(response.data.sinks || [], null, 2);
   } catch (error: unknown) {
@@ -197,6 +200,7 @@ export async function listLogScopes(
   };
 
   try {
+    const logging = apiClientFactory.getLoggingClient();
     const response = await logging.projects.locations.logScopes.list(request);
     return JSON.stringify(response.data.logScopes || [], null, 2);
   } catch (error: unknown) {

@@ -16,8 +16,6 @@
 
 import { apiClientFactory } from '../../utils/api_client_factory.js';
 
-const monitoring = apiClientFactory.getMonitoringClient();
-
 /**
  * Lists metric descriptors from the Google Cloud Monitoring API.
  * @param name The project on which to execute the request.
@@ -42,6 +40,7 @@ export async function listMetricDescriptors(
   };
 
   try {
+    const monitoring = apiClientFactory.getMonitoringClient();
     const response = await monitoring.projects.metricDescriptors.list(request);
     return JSON.stringify(response.data.metricDescriptors || [], null, 2);
   } catch (error: unknown) {
@@ -94,6 +93,7 @@ export async function listTimeSeries(
   };
 
   try {
+    const monitoring = apiClientFactory.getMonitoringClient();
     const response = await monitoring.projects.timeSeries.list(request);
     return JSON.stringify(response.data.timeSeries || [], null, 2);
   } catch (error: unknown) {
@@ -130,6 +130,7 @@ export async function listAlertPolicies(
   };
 
   try {
+    const monitoring = apiClientFactory.getMonitoringClient();
     const response = await monitoring.projects.alertPolicies.list(request);
     return JSON.stringify(response.data.alertPolicies || [], null, 2);
   } catch (error: unknown) {
@@ -166,6 +167,7 @@ export async function listAlerts(
   };
 
   try {
+    const monitoring = apiClientFactory.getMonitoringClient();
     const response = await monitoring.projects.alerts.list(request);
     return JSON.stringify(response.data.alerts || [], null, 2);
   } catch (error: unknown) {

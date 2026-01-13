@@ -25,8 +25,8 @@ import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import { registerTools } from './tools/registration.js';
 import pkg from '../package.json' with { type: 'json' };
-
-console.log('GOOGLE_APPLICATION_CREDENTIALS', process.env['GOOGLE_APPLICATION_CREDENTIALS']);
+import { authContextStorage, AuthContext } from './utils/auth_context.js';
+import { authMiddleware, tokenGenerationHandler } from './middleware/auth.js';
 
 const getServer = (): McpServer => {
   const server = new McpServer({
@@ -42,11 +42,11 @@ const getServer = (): McpServer => {
 const transports: Record<string, StreamableHTTPServerTransport> = {};
 
 const main = async () => {
-  const MCP_PORT = process.env['MCP_PORT'] ? parseInt(process.env['MCP_PORT'], 10) : 3000;
+  const PORT = process.env['PORT'] ? parseInt(process.env['PORT'], 10) : 3000;
 
   const app = createMcpExpressApp();
 
-  // Health check endpoint for Docker/Kubernetes
+  // Health check endpoint
   app.get('/health', (_req: Request, res: Response) => {
     res.status(200).json({
       status: 'ok',
@@ -57,27 +57,19 @@ const main = async () => {
 
   // Readiness check endpoint
   app.get('/ready', (_req: Request, res: Response) => {
-    // Check if server is ready to accept requests
-    const isReady = Object.keys(transports).length >= 0; // Simple check
-    if (isReady) {
-      res.status(200).json({
-        status: 'ready',
-        activeSessions: Object.keys(transports).length,
-      });
-    } else {
-      res.status(503).json({ status: 'not ready' });
-    }
+    res.status(200).json({
+      status: 'ready',
+      activeSessions: Object.keys(transports).length,
+    });
   });
 
-  // MCP POST endpoint - handles initialization and tool calls
-  app.post('/mcp', async (req: Request, res: Response) => {
-    const sessionId = req.headers['mcp-session-id'] as string | undefined;
+  // Token generation endpoint (no auth required)
+  app.post('/auth/token', tokenGenerationHandler);
 
-    if (sessionId) {
-      console.log(`Received MCP request for session: ${sessionId}`);
-    } else {
-      console.log('New MCP request without session ID');
-    }
+  // MCP POST endpoint - handles initialization and tool calls
+  app.post('/mcp', authMiddleware, async (req: Request, res: Response) => {
+    const sessionId = req.headers['mcp-session-id'] as string | undefined;
+    const credentials = req.credentials;
 
     try {
       let transport: StreamableHTTPServerTransport;
@@ -107,8 +99,6 @@ const main = async () => {
         // Connect the transport to the MCP server
         const server = getServer();
         await server.connect(transport);
-        await transport.handleRequest(req, res, req.body);
-        return;
       } else {
         // Invalid request
         res.status(400).json({
@@ -122,8 +112,10 @@ const main = async () => {
         return;
       }
 
-      // Handle the request with existing transport
-      await transport.handleRequest(req, res, req.body);
+      const context: AuthContext = { credentials };
+      await authContextStorage.run(context, async () => {
+        await transport.handleRequest(req, res, req.body);
+      });
     } catch (error) {
       console.error('Error handling MCP request:', error);
       if (!res.headersSent) {
@@ -140,39 +132,38 @@ const main = async () => {
   });
 
   // MCP GET endpoint - handles SSE streams
-  app.get('/mcp', async (req: Request, res: Response) => {
+  app.get('/mcp', authMiddleware, async (req: Request, res: Response) => {
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
+    const credentials = req.credentials;
 
     if (!sessionId || !transports[sessionId]) {
       res.status(400).send('Invalid or missing session ID');
       return;
-    }
-
-    const lastEventId = req.headers['last-event-id'];
-    if (lastEventId) {
-      console.log(`Client reconnecting with Last-Event-ID: ${lastEventId}`);
-    } else {
-      console.log(`Establishing new SSE stream for session ${sessionId}`);
     }
 
     const transport = transports[sessionId];
-    await transport.handleRequest(req, res);
+    const context: AuthContext = { credentials };
+    await authContextStorage.run(context, async () => {
+      await transport.handleRequest(req, res);
+    });
   });
 
-  // MCP DELETE endpoint - handles session termination
-  app.delete('/mcp', async (req: Request, res: Response) => {
+  // MCP DELETE endpoint - session termination
+  app.delete('/mcp', authMiddleware, async (req: Request, res: Response) => {
     const sessionId = req.headers['mcp-session-id'] as string | undefined;
+    const credentials = req.credentials;
 
     if (!sessionId || !transports[sessionId]) {
       res.status(400).send('Invalid or missing session ID');
       return;
     }
 
-    console.log(`Received session termination request for session ${sessionId}`);
-
     try {
       const transport = transports[sessionId];
-      await transport.handleRequest(req, res);
+      const context: AuthContext = { credentials };
+      await authContextStorage.run(context, async () => {
+        await transport.handleRequest(req, res);
+      });
     } catch (error) {
       console.error('Error handling session termination:', error);
       if (!res.headersSent) {
@@ -181,55 +172,30 @@ const main = async () => {
     }
   });
 
-  // Start the HTTP server
-  app.listen(MCP_PORT, () => {
-    console.log(`🚀 Cloud Observability MCP HTTP Server listening on port ${MCP_PORT}`);
-    console.log(`   Endpoint: http://localhost:${MCP_PORT}/mcp`);
+  app.listen(PORT, () => {
+    console.log(`🚀 Cloud Observability MCP HTTP Server listening on port ${PORT}`);
+    console.log(`   MCP Endpoint: http://localhost:${PORT}/mcp`);
+    console.log(`   Token Endpoint: http://localhost:${PORT}/auth/token`);
   });
 
-  // Handle server shutdown
-  process.on('SIGINT', async () => {
-    console.log('Shutting down server...');
-
-    // Close all active transports
+  const shutdown = async () => {
+    console.log('Shutting down...');
     for (const sessionId in transports) {
       try {
-        console.log(`Closing transport for session ${sessionId}`);
-        const transport = transports[sessionId];
-        if (transport) {
-          await transport.close();
-          delete transports[sessionId];
-        }
+        await transports[sessionId]?.close();
+        delete transports[sessionId];
       } catch (error) {
-        console.error(`Error closing transport for session ${sessionId}:`, error);
+        console.error(`Error closing session ${sessionId}:`, error);
       }
     }
-
-    console.log('Server shutdown complete');
     process.exit(0);
-  });
+  };
 
-  process.on('SIGTERM', async () => {
-    console.log('Received SIGTERM, shutting down gracefully...');
-
-    for (const sessionId in transports) {
-      try {
-        const transport = transports[sessionId];
-        if (transport) {
-          await transport.close();
-          delete transports[sessionId];
-        }
-      } catch (error) {
-        console.error(`Error closing transport for session ${sessionId}:`, error);
-      }
-    }
-
-    process.exit(0);
-  });
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
 };
 
 main().catch((err: unknown) => {
-  const error = err instanceof Error ? err : undefined;
-  console.error('❌ Unable to start Cloud Observability MCP HTTP server.', error);
+  console.error('❌ Unable to start server:', err instanceof Error ? err : undefined);
   process.exit(1);
 });

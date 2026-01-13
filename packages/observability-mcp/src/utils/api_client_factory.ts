@@ -23,26 +23,45 @@ import {
   google,
 } from 'googleapis';
 import { GoogleAuth } from 'google-auth-library';
+import { getCurrentCredentials } from './auth_context.js';
+import { GcpCredentials } from './auth.js';
 
 export class ApiClientFactory {
-  private static instance: ApiClientFactory;
   private readonly auth: Auth.GoogleAuth;
   private monitoringClient?: monitoring_v3.Monitoring;
   private loggingClient?: logging_v2.Logging;
   private errorReportingClient?: clouderrorreporting_v1beta1.Clouderrorreporting;
   private traceClient?: cloudtrace_v1.Cloudtrace;
 
-  private constructor() {
+  private constructor(credentials: GcpCredentials) {
     this.auth = new GoogleAuth({
+      credentials: {
+        type: credentials.type,
+        client_email: credentials.client_email,
+        private_key: credentials.private_key,
+      },
+      projectId: credentials.project_id,
       scopes: 'https://www.googleapis.com/auth/cloud-platform',
     });
   }
 
-  static getInstance(): ApiClientFactory {
-    if (!ApiClientFactory.instance) {
-      ApiClientFactory.instance = new ApiClientFactory();
+  /**
+   * Create a new instance with specific credentials.
+   */
+  static createWithCredentials(credentials: GcpCredentials): ApiClientFactory {
+    return new ApiClientFactory(credentials);
+  }
+
+  /**
+   * Get an instance based on the current async context.
+   * Throws an error if no credentials are available in the context.
+   */
+  static getInstanceForCurrentContext(): ApiClientFactory {
+    const credentials = getCurrentCredentials();
+    if (!credentials) {
+      throw new Error('No credentials found in current context. Authorization is required.');
     }
-    return ApiClientFactory.instance;
+    return new ApiClientFactory(credentials);
   }
 
   getMonitoringClient(): monitoring_v3.Monitoring {
@@ -86,4 +105,17 @@ export class ApiClientFactory {
   }
 }
 
-export const apiClientFactory = ApiClientFactory.getInstance();
+/**
+ * Get the API client factory for the current context.
+ * Credentials must be available in the async local storage context.
+ */
+export const apiClientFactory = {
+  getMonitoringClient: (): monitoring_v3.Monitoring =>
+    ApiClientFactory.getInstanceForCurrentContext().getMonitoringClient(),
+  getLoggingClient: (): logging_v2.Logging =>
+    ApiClientFactory.getInstanceForCurrentContext().getLoggingClient(),
+  getErrorReportingClient: (): clouderrorreporting_v1beta1.Clouderrorreporting =>
+    ApiClientFactory.getInstanceForCurrentContext().getErrorReportingClient(),
+  getTraceClient: (): cloudtrace_v1.Cloudtrace =>
+    ApiClientFactory.getInstanceForCurrentContext().getTraceClient(),
+};

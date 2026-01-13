@@ -16,8 +16,6 @@
 
 import { apiClientFactory } from '../../utils/api_client_factory.js';
 
-const trace = apiClientFactory.getTraceClient();
-
 /**
  * Lists traces from the Google Cloud Trace API.
  * @param projectId The Google Cloud project ID.
@@ -52,6 +50,7 @@ export async function listTraces(
   };
 
   try {
+    const trace = apiClientFactory.getTraceClient();
     const response = await trace.projects.traces.list(request);
     return JSON.stringify(response.data.traces || [], null, 2);
   } catch (error: unknown) {
@@ -76,6 +75,7 @@ export async function getTrace(projectId: string, traceId: string): Promise<stri
   };
 
   try {
+    const trace = apiClientFactory.getTraceClient();
     const response = await trace.projects.traces.get(request);
     return JSON.stringify(response.data || {}, null, 2);
   } catch (error: unknown) {
